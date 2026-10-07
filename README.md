@@ -12,7 +12,7 @@ The proxy's main features are:
 
 - supports routing traffic to multiple permitted remote *authorities* (`host:port`) concurrently. This means that it can distinguish traffic to different ports accepting requests on the same destination server
 - pools the API requests from all clients and enforces global rate limits per destination authority. The available rate limit is thus shared dynamically among the client processes that are actively sending requests
-- an access-control mechanism not primarily for security, but as the means to guarantee explicit configuration of each remote authority and its rate limits
+- an access-control mechanism not primarily for security, but as the means to guarantee explicit configuration of each remote authority and its rate limit
 - supports both sequential requests and concurrent bursts of requests
 - supports arbitrarily low rate limits (i.e. below 1 request per second)
 - logs to the console via a custom implementation and to a file via [Pino](https://github.com/pinojs/pino)
@@ -28,11 +28,13 @@ Additionally, I provide two **interchangeable** middleware implementations to su
 
 1. Uses the HTTP CONNECT method to establish a TCP tunnel and a persistent Agent via the pass-through **proxy** to manage the connection and traffic;
 
-2. Uses Node's built-in `fetch` for a **direct** connection (no proxy). This is intended for cases where multiple processes do not need to share a rate limit. In other words, only one process is making requests to a particular destination authority. This version provides the same transparent request construction, error handling, and retry logic, while also handling the request queue and rate limiting locally, rather than relying on the proxy to do so. It also shares the same known limitations, except for the potential request size limit.
+2. Uses Node's built-in `fetch()` for a **direct** connection (no proxy). This is intended for cases where multiple processes do not need to share a rate limit. In other words, only one process is making requests to a particular destination authority. This version provides the same transparent request construction, error handling, and retry logic, while also handling the request queue and rate limiting locally, rather than relying on the proxy to do so. It also shares the same known limitations, except for the potential request size limit.
 
 The middleware implementations expect API responses in JSON format; the pass-through proxy itself is not restricted to JSON traffic.
 
 The middleware implementations fall back to a low-frequency heartbeat mode if they encounter persistent recoverable errors, rather than giving up or skipping requests.
+
+The code executes a no-tolerance policy for unrecoverable or unknown connection errors. This is intentional: if there is a mistake in the URL or execution encounters an error it is not prepared to handle, the error is reported and the application is terminated so that the error can be fixed or diagnosed (fail-fast approach). When embedding either middleware in a larger application that should not be terminated by such an error, the error propagation stack is already in place, and it is simply a matter of raising a new custom error instead of terminating the application.
 
 I provide test client files to a number of public remote servers (scripts ending in '_request.js') to demonstrate both the simplified request interface and the middleware's support for different types of requests:
 
@@ -48,14 +50,14 @@ I provide test client files to a number of public remote servers (scripts ending
 
 ### Server configuration
 
-In the `lib/conf/` folder create an appropriately named configuration file *for each* server you intend to access, or adjust the existing examples to your needs. File names starting with 'pino' or 'proxy' are ignored. Everything else is imported automatically. If you are just going to use the proxy and plug in your own client implementation, all you need is
+In the `lib/conf/` folder create an appropriately named configuration file *for each* server you intend to access, or adjust the existing examples to your needs. File names starting with 'pino' or 'proxy' are ignored; everything else is imported automatically. If you are just going to use the proxy and plug in your own client implementation, all you need is
 
 ```js
 const remoteConf = {
     host: 'api.servernameOrIP.com',
     protocol: "https:",
     port: 443,
-    rateLimit: 5, // Requests per second
+    rateLimit: 5, // requests per second
     rollingWindow: 1000, // in milliseconds
 }
 
@@ -89,7 +91,7 @@ const remoteConf = {
     host: 'api.openalex.org',
     protocol: "https:",
     port: 443,
-    rateLimit: 5, // Requests per second
+    rateLimit: 5, // requests per second
     rollingWindow: 1000, // in milliseconds
     headers: {},
     endpoints: {
@@ -116,7 +118,7 @@ const remoteConf = {
 }
 ```
 
-You can leave `headers`, `body` and `searchParams` as empty objects when there are no values to include, or you can omit them. See the [GitHub configuration file](lib/conf/github.js) and the [OpenAleX configuration file](lib/conf/open_alex.js) for demonstration examples.
+You can leave `headers`, `body` and `searchParams` as empty objects when there are no values to include, or you can omit them. See the [GitHub configuration file](lib/conf/github.js) and the [OpenAlex configuration file](lib/conf/open_alex.js) for demonstration examples.
 
 Also note that the `build()` function only needs to contain `key:value` pairs for configuration elements that actually need to change from request to request. Any static elements can be placed outside.
 
